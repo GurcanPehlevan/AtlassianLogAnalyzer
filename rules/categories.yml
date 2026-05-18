@@ -1,0 +1,91 @@
+rules:
+  - category: Database
+    patterns:
+      - "\\bSQLException\\b"
+      - "\\bPSQLException\\b"
+      - "\\bSQLRecoverableException\\b"
+      - "database connection"
+      - "deadlock detected"
+      - "connection pool"
+
+  - category: Network
+    patterns:
+      - "Connection refused"
+      - "Connection reset"
+      - "Read timed out"
+      - "SocketTimeoutException"
+      - "UnknownHostException"
+      - "No route to host"
+
+  - category: License
+    patterns:
+      - "license"
+      - "licence"
+      - "evaluation expired"
+      - "too many users"
+
+  - category: Search / OpenSearch
+    patterns:
+      - "OpenSearch"
+      - "Elasticsearch"
+      - "Lucene"
+      - "indexing"
+      - "search index"
+
+  - category: Cluster / Hazelcast
+    patterns:
+      - "Hazelcast"
+      - "cluster node"
+      - "split brain"
+      - "ClusterJoin"
+      - "heartbeat"
+
+  - category: NFS / Shared Home
+    patterns:
+      - "\\bNFS\\b"
+      - "shared home"
+      - "stale file handle"
+      - "FileLock"
+      - "permission denied"
+
+  - category: SMTP / TLS
+    patterns:
+      - "\\bSMTP\\b"
+      - "STARTTLS"
+      - "SSLHandshakeException"
+      - "PKIX path building failed"
+      - "mail server"
+
+  - category: Plugin
+    patterns:
+      - "plugin"
+      - "osgi"
+      - "bundle"
+      - "Marketplace"
+      - "UPM"
+
+  - category: Memory / JVM
+    patterns:
+      - "OutOfMemoryError"
+      - "Java heap space"
+      - "GC overhead limit"
+      - "Metaspace"
+      - "StackOverflowError"
+
+  - category: Startup / Shutdown
+    patterns:
+      - "startup"
+      - "shutdown"
+      - "LifecycleException"
+      - "Tomcat"
+      - "Spring context"
+
+  - category: Authentication / SSO
+    patterns:
+      - "SAML"
+      - "OAuth"
+      - "OpenID"
+      - "SSO"
+      - "LDAP"
+      - "Crowd authentication"
+      - "login failed"

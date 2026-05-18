@@ -1,0 +1,9 @@
+2026-05-18 09:12:33,120 ERROR [http-nio-8080-exec-7] [c.a.jira.issue.index] Reindex failed due to database connection issue
+java.sql.SQLException: connection pool exhausted
+    at com.atlassian.jira.index.DefaultIndexManager.reIndex(DefaultIndexManager.java:120)
+    at com.atlassian.jira.web.action.admin.ReIndexAsyncIndexerCommand.doReindex(ReIndexAsyncIndexerCommand.java:75)
+Caused by: org.postgresql.util.PSQLException: Connection refused
+    at org.postgresql.core.v3.ConnectionFactoryImpl.openConnectionImpl(ConnectionFactoryImpl.java:303)
+2026-05-18 09:15:10,500 WARN [Caesium-1-4] [c.a.mail.queue] SMTP STARTTLS handshake warning
+javax.net.ssl.SSLHandshakeException: PKIX path building failed
+    at sun.security.ssl.Alert.createSSLException(Alert.java:131)
