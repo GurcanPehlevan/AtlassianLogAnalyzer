@@ -35,10 +35,10 @@ HTML_TEMPLATE = Template(
     {% endfor %}
   </section>
   <table>
-    <thead><tr><th>Time</th><th>Level</th><th>Category</th><th>File</th><th>Message</th></tr></thead>
+    <thead><tr><th>Time</th><th>Level</th><th>Category</th><th>Log Type</th><th>File</th><th>Message</th></tr></thead>
     <tbody>
     {% for event in events %}
-      <tr><td>{{ event.time }}</td><td>{{ event.level }}</td><td>{{ event.category }}</td><td>{{ event.file }}</td><td>{{ event.message }}</td></tr>
+      <tr><td>{{ event.time }}</td><td>{{ event.level }}</td><td>{{ event.category }}</td><td>{{ event.log_type }}</td><td>{{ event.file }}</td><td>{{ event.message }}</td></tr>
     {% endfor %}
     </tbody>
   </table>
@@ -68,7 +68,7 @@ class ReportGenerator:
 
     def to_csv(self, events: list[LogEvent]) -> str:
         buffer = io.StringIO()
-        writer = csv.DictWriter(buffer, fieldnames=["time", "level", "category", "file", "message"])
+        writer = csv.DictWriter(buffer, fieldnames=["time", "level", "category", "log_type", "file", "message"])
         writer.writeheader()
         for event in events:
             writer.writerow(
@@ -76,6 +76,7 @@ class ReportGenerator:
                     "time": event.time,
                     "level": event.level,
                     "category": event.category,
+                    "log_type": event.log_type,
                     "file": event.file,
                     "message": event.message,
                 }
@@ -95,13 +96,13 @@ class ReportGenerator:
             f"- Last error time: {summary.last_error_time or 'N/A'}",
             f"- Top category: {summary.top_category}",
             "",
-            "| Time | Level | Category | File | Message |",
-            "| --- | --- | --- | --- | --- |",
+            "| Time | Level | Category | Log Type | File | Message |",
+            "| --- | --- | --- | --- | --- | --- |",
         ]
         for event in result.events:
             lines.append(
                 f"| {escape_md(event.time)} | {escape_md(event.level)} | {escape_md(event.category)} | "
-                f"{escape_md(event.file)} | {escape_md(event.message)} |"
+                f"{escape_md(event.log_type)} | {escape_md(event.file)} | {escape_md(event.message)} |"
             )
         return "\n".join(lines)
 
@@ -128,6 +129,7 @@ def asdict_without_parsed_time(event: LogEvent) -> dict[str, str]:
         "time": event.time,
         "level": event.level,
         "category": event.category,
+        "log_type": event.log_type,
         "file": event.file,
         "message": event.message,
         "raw": event.raw,

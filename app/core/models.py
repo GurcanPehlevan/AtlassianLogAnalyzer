@@ -18,6 +18,7 @@ class LogEvent:
     parsed_time: datetime | None
     level: str
     category: str
+    log_type: str
     file: str
     message: str
     raw: str

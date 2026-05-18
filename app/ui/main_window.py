@@ -1,12 +1,16 @@
 from __future__ import annotations
 
+import subprocess
 import sys
+from datetime import datetime
 from pathlib import Path
 
-from PySide6.QtCore import QSortFilterProxyModel, Qt
-from PySide6.QtGui import QAction, QStandardItem, QStandardItemModel
+from PySide6.QtCore import QDateTime, QSortFilterProxyModel, Qt
+from PySide6.QtGui import QAction, QFont, QStandardItem, QStandardItemModel
 from PySide6.QtWidgets import (
+    QCheckBox,
     QComboBox,
+    QDateTimeEdit,
     QFileDialog,
     QGridLayout,
     QHBoxLayout,
@@ -43,18 +47,38 @@ CATEGORIES = [
     "Unknown",
 ]
 
+PARSED_TIME_ROLE = Qt.UserRole + 1
+FILE_PATH_ROLE = Qt.UserRole + 2
+
 
 class EventFilterProxy(QSortFilterProxyModel):
     def __init__(self) -> None:
         super().__init__()
         self.level = "All"
         self.category = "All"
+        self.log_type = "All"
         self.keyword = ""
+        self.use_date_range = False
+        self.start_date: datetime | None = None
+        self.end_date: datetime | None = None
 
-    def set_filters(self, level: str, category: str, keyword: str) -> None:
+    def set_filters(
+        self,
+        level: str,
+        category: str,
+        log_type: str,
+        keyword: str,
+        use_date_range: bool,
+        start_date: datetime | None,
+        end_date: datetime | None,
+    ) -> None:
         self.level = level
         self.category = category
+        self.log_type = log_type
         self.keyword = keyword.lower().strip()
+        self.use_date_range = use_date_range
+        self.start_date = start_date
+        self.end_date = end_date
         self.invalidateFilter()
 
     def filterAcceptsRow(self, source_row: int, source_parent) -> bool:  # noqa: ANN001
@@ -64,6 +88,8 @@ class EventFilterProxy(QSortFilterProxyModel):
 
         level = model.index(source_row, 1, source_parent).data()
         category = model.index(source_row, 2, source_parent).data()
+        log_type = model.index(source_row, 3, source_parent).data()
+        parsed_time = model.index(source_row, 0, source_parent).data(PARSED_TIME_ROLE)
         row_text = " ".join(
             str(model.index(source_row, col, source_parent).data() or "").lower() for col in range(model.columnCount())
         )
@@ -72,6 +98,15 @@ class EventFilterProxy(QSortFilterProxyModel):
             return False
         if self.category != "All" and category != self.category:
             return False
+        if self.log_type != "All" and log_type != self.log_type:
+            return False
+        if self.use_date_range:
+            if not isinstance(parsed_time, datetime):
+                return False
+            if self.start_date and parsed_time < self.start_date:
+                return False
+            if self.end_date and parsed_time > self.end_date:
+                return False
         if self.keyword and self.keyword not in row_text:
             return False
         return True
@@ -85,8 +120,8 @@ class MainWindow(QMainWindow):
         self.report_generator = ReportGenerator()
         self.result: AnalysisResult | None = None
 
-        self.model = QStandardItemModel(0, 5)
-        self.model.setHorizontalHeaderLabels(["Time", "Level", "Category", "File", "Message"])
+        self.model = QStandardItemModel(0, 6)
+        self.model.setHorizontalHeaderLabels(["Time", "Level", "Category", "Log Type", "File", "Message"])
         self.proxy = EventFilterProxy()
         self.proxy.setSourceModel(self.model)
 
@@ -156,14 +191,34 @@ class MainWindow(QMainWindow):
         self.category_filter.addItems(CATEGORIES)
         self.keyword_filter = QLineEdit()
         self.keyword_filter.setPlaceholderText("Keyword")
+        self.log_type_filter = QComboBox()
+        self.log_type_filter.addItem("All")
         self.clear_filters_button = QPushButton("Clear")
         filter_bar.addWidget(QLabel("Level"))
         filter_bar.addWidget(self.level_filter)
         filter_bar.addWidget(QLabel("Category"))
         filter_bar.addWidget(self.category_filter)
+        filter_bar.addWidget(QLabel("Log Type"))
+        filter_bar.addWidget(self.log_type_filter)
         filter_bar.addWidget(self.keyword_filter, 1)
         filter_bar.addWidget(self.clear_filters_button)
         layout.addLayout(filter_bar)
+
+        date_filter_bar = QHBoxLayout()
+        self.date_range_filter = QCheckBox("Date range")
+        self.start_date_filter = QDateTimeEdit()
+        self.start_date_filter.setCalendarPopup(True)
+        self.start_date_filter.setDisplayFormat("yyyy-MM-dd HH:mm:ss")
+        self.end_date_filter = QDateTimeEdit()
+        self.end_date_filter.setCalendarPopup(True)
+        self.end_date_filter.setDisplayFormat("yyyy-MM-dd HH:mm:ss")
+        date_filter_bar.addWidget(self.date_range_filter)
+        date_filter_bar.addWidget(QLabel("From"))
+        date_filter_bar.addWidget(self.start_date_filter)
+        date_filter_bar.addWidget(QLabel("To"))
+        date_filter_bar.addWidget(self.end_date_filter)
+        date_filter_bar.addStretch(1)
+        layout.addLayout(date_filter_bar)
 
         self.table = QTableView()
         self.table.setModel(self.proxy)
@@ -172,20 +227,28 @@ class MainWindow(QMainWindow):
         self.table.setAlternatingRowColors(True)
         self.table.horizontalHeader().setStretchLastSection(True)
         self.table.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.table.clicked.connect(self.open_file_cell)
+        self.table.doubleClicked.connect(self.open_event_file)
         layout.addWidget(self.table, 1)
 
         self.level_filter.currentTextChanged.connect(self.apply_filters)
         self.category_filter.currentTextChanged.connect(self.apply_filters)
+        self.log_type_filter.currentTextChanged.connect(self.apply_filters)
         self.keyword_filter.textChanged.connect(self.apply_filters)
+        self.date_range_filter.toggled.connect(self.apply_filters)
+        self.start_date_filter.dateTimeChanged.connect(self.apply_filters)
+        self.end_date_filter.dateTimeChanged.connect(self.apply_filters)
         self.clear_filters_button.clicked.connect(self.clear_filters)
 
         root.setStyleSheet(
             """
-            QLabel#Title { font-size: 24px; font-weight: 700; color: #172b4d; }
-            QLabel#Caption { color: #5e6c84; font-size: 12px; }
-            QLabel#Metric { font-size: 18px; font-weight: 600; color: #172b4d; }
-            QTableView { border: 1px solid #dfe1e6; gridline-color: #ebecf0; }
-            QLineEdit, QComboBox { min-height: 28px; }
+            QLabel#Title { font-size: 24px; font-weight: 700; color: palette(window-text); }
+            QLabel#Caption { color: palette(window-text); font-size: 12px; }
+            QLabel#Metric { font-size: 18px; font-weight: 600; color: palette(window-text); }
+            QTableView { border: 1px solid palette(mid); gridline-color: palette(midlight); color: palette(text); }
+            QHeaderView::section { color: palette(text); }
+            QLineEdit, QComboBox, QDateTimeEdit { min-height: 28px; color: palette(text); }
+            QCheckBox, QLabel { color: palette(window-text); }
             """
         )
         self.setCentralWidget(root)
@@ -218,6 +281,9 @@ class MainWindow(QMainWindow):
             return
         self.update_summary()
         self.update_table(self.result.events)
+        self.update_date_range(self.result.events)
+        self.update_log_type_filter(self.result.events)
+        self.apply_filters()
 
     def update_summary(self) -> None:
         if not self.result:
@@ -235,10 +301,11 @@ class MainWindow(QMainWindow):
         self.model.removeRows(0, self.model.rowCount())
         for event in events:
             row = [
-                QStandardItem(event.time),
+                event_item(event.time, event.parsed_time),
                 QStandardItem(event.level),
                 QStandardItem(event.category),
-                QStandardItem(event.file),
+                QStandardItem(event.log_type),
+                file_item(event.file),
                 QStandardItem(event.message),
             ]
             for item in row:
@@ -246,17 +313,74 @@ class MainWindow(QMainWindow):
             self.model.appendRow(row)
         self.table.resizeColumnsToContents()
 
+    def update_date_range(self, events: list[LogEvent]) -> None:
+        parsed_times = [event.parsed_time for event in events if event.parsed_time]
+        if not parsed_times:
+            now = QDateTime.currentDateTime()
+            self.start_date_filter.setDateTime(now)
+            self.end_date_filter.setDateTime(now)
+            return
+        self.start_date_filter.setDateTime(qdatetime_from_datetime(min(parsed_times)))
+        self.end_date_filter.setDateTime(qdatetime_from_datetime(max(parsed_times)))
+
+    def update_log_type_filter(self, events: list[LogEvent]) -> None:
+        current = self.log_type_filter.currentText()
+        log_types = sorted({event.log_type for event in events})
+        self.log_type_filter.blockSignals(True)
+        self.log_type_filter.clear()
+        self.log_type_filter.addItem("All")
+        self.log_type_filter.addItems(log_types)
+        if current in {"All", *log_types}:
+            self.log_type_filter.setCurrentText(current)
+        self.log_type_filter.blockSignals(False)
+
     def apply_filters(self) -> None:
         self.proxy.set_filters(
             self.level_filter.currentText(),
             self.category_filter.currentText(),
+            self.log_type_filter.currentText(),
             self.keyword_filter.text(),
+            self.date_range_filter.isChecked(),
+            self.start_date_filter.dateTime().toPython(),
+            self.end_date_filter.dateTime().toPython(),
         )
 
     def clear_filters(self) -> None:
         self.level_filter.setCurrentText("All")
         self.category_filter.setCurrentText("All")
+        self.log_type_filter.setCurrentText("All")
+        self.date_range_filter.setChecked(False)
         self.keyword_filter.clear()
+
+    def open_event_file(self, index) -> None:  # noqa: ANN001
+        if not index.isValid():
+            return
+        source_index = self.proxy.mapToSource(index)
+        file_index = self.model.index(source_index.row(), 4)
+        file_path = str(file_index.data(FILE_PATH_ROLE) or file_index.data() or "")
+        if not file_path:
+            return
+        path = Path(file_path.split("!/", 1)[0])
+        if not path.exists():
+            QMessageBox.warning(self, "File not found", f"Could not find:\n{path}")
+            return
+        if "!/" in file_path:
+            QMessageBox.information(
+                self,
+                "Archive item",
+                "This event comes from inside an archive. Opening the archive file instead.",
+            )
+        try:
+            subprocess.run(["open", "-t", str(path)], check=False)
+        except OSError as exc:
+            QMessageBox.warning(self, "Open failed", str(exc))
+
+    def open_file_cell(self, index) -> None:  # noqa: ANN001
+        if not index.isValid():
+            return
+        source_index = self.proxy.mapToSource(index)
+        if source_index.column() == 4:
+            self.open_event_file(index)
 
     def export_report(self) -> None:
         if not self.result:
@@ -303,3 +427,23 @@ def rules_dir() -> Path:
     if bundled_rules.exists():
         return bundled_rules
     return Path("rules")
+
+
+def event_item(time: str, parsed_time: datetime | None) -> QStandardItem:
+    item = QStandardItem(time)
+    item.setData(parsed_time, PARSED_TIME_ROLE)
+    return item
+
+
+def file_item(file_path: str) -> QStandardItem:
+    item = QStandardItem(file_path)
+    item.setData(file_path, FILE_PATH_ROLE)
+    item.setToolTip("Click to open this file in a text editor")
+    font = QFont()
+    font.setUnderline(True)
+    item.setFont(font)
+    return item
+
+
+def qdatetime_from_datetime(value: datetime) -> QDateTime:
+    return QDateTime.fromSecsSinceEpoch(int(value.timestamp()))

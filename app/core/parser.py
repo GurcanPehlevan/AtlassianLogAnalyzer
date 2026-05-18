@@ -4,6 +4,7 @@ import re
 from datetime import datetime
 
 from app.core.categorizer import Categorizer
+from app.core.log_types import infer_log_type
 from app.core.models import LogEvent, LogSource
 
 
@@ -79,6 +80,7 @@ class LogParser:
             parsed_time=parse_time(time_value),
             level=str(data.get("level") or "").upper(),
             category=category,
+            log_type=infer_log_type(source.display_path),
             file=source.display_path,
             message=message,
             raw=raw,
