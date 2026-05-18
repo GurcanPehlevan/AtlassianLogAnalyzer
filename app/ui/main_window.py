@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 
 from PySide6.QtCore import QSortFilterProxyModel, Qt
@@ -80,7 +81,7 @@ class MainWindow(QMainWindow):
     def __init__(self) -> None:
         super().__init__()
         self.setWindowTitle("Atlassian Log Analyzer")
-        self.analyzer = Analyzer(rules_dir=Path("rules"))
+        self.analyzer = Analyzer(rules_dir=rules_dir())
         self.report_generator = ReportGenerator()
         self.result: AnalysisResult | None = None
 
@@ -294,3 +295,11 @@ def format_from_filter(selected_filter: str, file_name: str) -> str:
     if "CSV" in selected_filter:
         return "csv"
     return "html"
+
+
+def rules_dir() -> Path:
+    bundle_root = Path(getattr(sys, "_MEIPASS", Path.cwd()))
+    bundled_rules = bundle_root / "rules"
+    if bundled_rules.exists():
+        return bundled_rules
+    return Path("rules")
